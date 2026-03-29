@@ -1,11 +1,10 @@
 ---
 title: PromptGuard
-emoji: "\U0001F6E1"
+emoji: 🔒
 colorFrom: purple
 colorTo: indigo
 sdk: docker
 app_port: 7860
-pinned: false
 ---
 
 # PromptGuard: Prompt Injection Defense Environment
