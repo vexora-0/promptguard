@@ -2,13 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system deps
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy project files (repo root -> /app, so promptguard/ becomes /app/promptguard/)
-COPY . /app
+# Copy project files
+COPY promptguard/ /app/promptguard/
+COPY README.md /app/
 
 # Install Python dependencies
 RUN pip install --no-cache-dir \
@@ -18,15 +14,11 @@ RUN pip install --no-cache-dir \
     "requests>=2.31.0" \
     "openai>=1.0.0"
 
-# Expose port
+# HF Spaces expects port 7860 by default, but we declared app_port: 8000
 EXPOSE 8000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
 # Set Python path so imports work
 ENV PYTHONPATH="/app"
 
-# Run server
-CMD ["uvicorn", "promptguard.server.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run server - bind to 0.0.0.0 for HF Spaces
+CMD ["python", "-m", "uvicorn", "promptguard.server.app:app", "--host", "0.0.0.0", "--port", "8000"]
