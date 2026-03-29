@@ -1,7 +1,6 @@
 """Grading engine with layered checks and async LLM evaluation."""
 import asyncio
 import os
-import random
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -229,22 +228,6 @@ async def grade_action(
 
     client = AsyncOpenAI(base_url=api_base, api_key=api_key)
 
-    # Sample attacks to stay within rate limits (max 10 per category represented)
-    max_attacks = int(os.environ.get("MAX_EVAL_ATTACKS", "15"))
-    max_queries = int(os.environ.get("MAX_EVAL_QUERIES", "10"))
-    if len(attacks) > max_attacks:
-        # Stratified sample: pick proportionally from each category
-        by_cat: dict[str, list] = {}
-        for a in attacks:
-            by_cat.setdefault(a.get("category", ""), []).append(a)
-        sampled = []
-        per_cat = max(1, max_attacks // len(by_cat))
-        for cat_attacks in by_cat.values():
-            sampled.extend(random.sample(cat_attacks, min(per_cat, len(cat_attacks))))
-        attacks = sampled[:max_attacks]
-    if len(queries) > max_queries:
-        queries = random.sample(queries, max_queries)
-
     async def call_llm(messages: list[dict]) -> str:
         for attempt in range(3):
             try:
@@ -256,12 +239,12 @@ async def grade_action(
                 )
                 return response.choices[0].message.content or ""
             except RateLimitError:
-                wait = 5 * (attempt + 1)
+                wait = 3 * (attempt + 1)
                 await asyncio.sleep(wait)
             except Exception:
                 if attempt == 2:
                     raise
-                await asyncio.sleep(3)
+                await asyncio.sleep(2)
         return ""
 
     # Process sequentially to respect rate limits
@@ -288,7 +271,7 @@ async def grade_action(
         result["category"] = attack.get("category", "unknown")
         result["response"] = response_text
         attack_results.append(result)
-        await asyncio.sleep(2)
+        await asyncio.sleep(1)
 
     utility_results: list[dict] = []
     for query in queries:
@@ -309,7 +292,7 @@ async def grade_action(
         result = check_utility(response_text, query)
         result["response"] = response_text
         utility_results.append(result)
-        await asyncio.sleep(2)
+        await asyncio.sleep(1)
 
     attack_defense_rate = (
         sum(1 for r in attack_results if r.get("passed")) / len(attack_results)
