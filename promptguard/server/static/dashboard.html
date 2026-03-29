@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PromptGuard Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a1a;
+      color: #ffffff;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      padding: 24px 20px 40px;
+    }
+
+    /* ── Header ───────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    header .shield { font-size: 2rem; line-height: 1; }
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    header .badge {
+      margin-left: auto;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: #1e1e3a;
+      color: #a0a0b0;
+      border: 1px solid #2e2e50;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    header .badge.live { color: #22c55e; border-color: #22c55e33; }
+
+    /* ── Empty state ──────────────────────────────────────── */
+    #empty-state {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 50vh;
+      gap: 16px;
+      color: #a0a0b0;
+      text-align: center;
+    }
+    #empty-state .icon { font-size: 3.5rem; opacity: 0.5; }
+    #empty-state p { font-size: 1.1rem; max-width: 400px; line-height: 1.6; }
+    #empty-state code {
+      font-size: 0.9rem;
+      background: #12122a;
+      border: 1px solid #2e2e50;
+      padding: 8px 16px;
+      border-radius: 8px;
+      color: #a78bfa;
+    }
+
+    /* ── Main content ─────────────────────────────────────── */
+    #main-content { display: none; }
+
+    /* ── Cards row ────────────────────────────────────────── */
+    .cards-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 700px) { .cards-row { grid-template-columns: 1fr; } }
+
+    .card {
+      background: #12122a;
+      border: 1px solid #1e1e40;
+      border-radius: 16px;
+      padding: 24px 20px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(124,58,237,0.08) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .card .card-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #a0a0b0;
+      margin-bottom: 12px;
+    }
+    .card .card-value {
+      font-size: 2.8rem;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+    .card .card-sub {
+      font-size: 0.82rem;
+      color: #a0a0b0;
+      margin-top: 8px;
+    }
+    .card .card-icon {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      font-size: 1.6rem;
+      opacity: 0.25;
+    }
+
+    /* value color helpers */
+    .val-green  { color: #22c55e; }
+    .val-yellow { color: #eab308; }
+    .val-red    { color: #ef4444; }
+    .val-blue   { color: #38bdf8; }
+    .val-purple { color: #a78bfa; }
+
+    /* ── Charts row ───────────────────────────────────────── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 850px) { .charts-row { grid-template-columns: 1fr; } }
+
+    .chart-card {
+      background: #12122a;
+      border: 1px solid #1e1e40;
+      border-radius: 16px;
+      padding: 20px;
+    }
+    .chart-card h3 {
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: #a0a0b0;
+      margin-bottom: 16px;
+    }
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+    }
+    .chart-wrap.donut { max-width: 200px; margin: 0 auto; }
+    .chart-wrap.line  { height: 200px; }
+
+    /* ── Info row ─────────────────────────────────────────── */
+    .info-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 700px) { .info-row { grid-template-columns: 1fr; } }
+
+    /* ── Feedback card ────────────────────────────────────── */
+    .feedback-card {
+      background: #12122a;
+      border: 1px solid #1e1e40;
+      border-radius: 16px;
+      padding: 20px;
+    }
+    .feedback-card h3 {
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: #a0a0b0;
+      margin-bottom: 12px;
+    }
+    #feedback-text {
+      font-size: 0.92rem;
+      line-height: 1.65;
+      color: #d0d0e8;
+      white-space: pre-line;
+      word-break: break-word;
+    }
+
+    /* ── Task info card ───────────────────────────────────── */
+    .task-card {
+      background: #12122a;
+      border: 1px solid #1e1e40;
+      border-radius: 16px;
+      padding: 20px;
+    }
+    .task-card h3 {
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: #a0a0b0;
+      margin-bottom: 14px;
+    }
+    .task-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #1e1e40;
+      font-size: 0.9rem;
+    }
+    .task-row:last-child { border-bottom: none; }
+    .task-row .tkey { color: #a0a0b0; }
+    .task-row .tval { font-weight: 600; color: #ffffff; }
+
+    /* ── Progress bar ─────────────────────────────────────── */
+    .step-bar-wrap {
+      height: 6px;
+      background: #1e1e40;
+      border-radius: 3px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+    .step-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #7c3aed, #a78bfa);
+      transition: width 0.5s ease;
+    }
+
+    /* ── Done banner ──────────────────────────────────────── */
+    #done-banner {
+      display: none;
+      background: linear-gradient(135deg, #052e16, #14532d);
+      border: 1px solid #22c55e44;
+      border-radius: 12px;
+      padding: 14px 20px;
+      color: #4ade80;
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-align: center;
+      margin-bottom: 20px;
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Footer ───────────────────────────────────────────── */
+    footer {
+      text-align: center;
+      margin-top: 32px;
+      font-size: 0.75rem;
+      color: #3a3a5a;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="shield">🛡️</span>
+    <h1>PromptGuard Dashboard</h1>
+    <span class="badge" id="status-badge">Connecting…</span>
+  </header>
+
+  <!-- Empty state -->
+  <div id="empty-state">
+    <div class="icon">📊</div>
+    <p>Waiting for evaluation data…<br>Run inference.py to see results.</p>
+    <code>python inference.py</code>
+  </div>
+
+  <!-- Main content (hidden until data arrives) -->
+  <div id="main-content">
+
+    <div id="done-banner">✅ Evaluation complete — all steps finished.</div>
+
+    <!-- Score cards -->
+    <div class="cards-row">
+      <div class="card">
+        <span class="card-icon">🎯</span>
+        <div class="card-label">Composite Score</div>
+        <div class="card-value" id="score-val">—</div>
+        <div class="card-sub" id="score-sub">Best: —</div>
+      </div>
+      <div class="card">
+        <span class="card-icon">🛡️</span>
+        <div class="card-label">Attack Defense Rate</div>
+        <div class="card-value val-blue" id="defense-val">—</div>
+        <div class="card-sub">% of attacks blocked</div>
+      </div>
+      <div class="card">
+        <span class="card-icon">⚡</span>
+        <div class="card-label">Utility Preservation Rate</div>
+        <div class="card-value val-purple" id="utility-val">—</div>
+        <div class="card-sub">% of benign queries served</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-row">
+      <div class="chart-card">
+        <h3>Score Breakdown</h3>
+        <div class="chart-wrap donut">
+          <canvas id="donut-chart"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h3>Score History</h3>
+        <div class="chart-wrap line">
+          <canvas id="line-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Info row -->
+    <div class="info-row">
+      <div class="task-card">
+        <h3>Task Info</h3>
+        <div class="task-row"><span class="tkey">Task ID</span><span class="tval" id="task-id-val">—</span></div>
+        <div class="task-row"><span class="tkey">Current Step</span><span class="tval" id="step-val">—</span></div>
+        <div class="task-row"><span class="tkey">Best Score</span><span class="tval" id="best-val">—</span></div>
+        <div class="step-bar-wrap"><div class="step-bar-fill" id="step-bar" style="width:0%"></div></div>
+      </div>
+      <div class="feedback-card">
+        <h3>Grader Feedback</h3>
+        <div id="feedback-text">No feedback yet.</div>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+
+  <footer>PromptGuard · auto-refreshes every 3 s</footer>
+
+  <script>
+    /* ── Helpers ────────────────────────────────────────── */
+    const $ = id => document.getElementById(id);
+
+    function scoreColor(v) {
+      if (v >= 0.75) return '#22c55e';
+      if (v >= 0.5)  return '#eab308';
+      return '#ef4444';
+    }
+    function scoreClass(v) {
+      if (v >= 0.75) return 'val-green';
+      if (v >= 0.5)  return 'val-yellow';
+      return 'val-red';
+    }
+    function pct(v) { return (v * 100).toFixed(1) + '%'; }
+
+    /* ── Chart instances ────────────────────────────────── */
+    let donutChart = null;
+    let lineChart  = null;
+
+    function buildDonut() {
+      const ctx = $('donut-chart').getContext('2d');
+      donutChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Defense (60%)', 'Utility (40%)'],
+          datasets: [{
+            data: [0.6, 0.4],
+            backgroundColor: ['#7c3aed', '#38bdf8'],
+            borderColor: '#12122a',
+            borderWidth: 3,
+            hoverOffset: 6,
+          }]
+        },
+        options: {
+          cutout: '68%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                color: '#a0a0b0',
+                font: { size: 11 },
+                padding: 14,
+                boxWidth: 12,
+                boxHeight: 12,
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: ctx => ` ${ctx.label}`
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function buildLine() {
+      const ctx = $('line-chart').getContext('2d');
+      lineChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Composite Score',
+            data: [],
+            borderColor: '#7c3aed',
+            backgroundColor: 'rgba(124,58,237,0.12)',
+            borderWidth: 2.5,
+            pointBackgroundColor: '#a78bfa',
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            fill: true,
+            tension: 0.35,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              ticks: { color: '#a0a0b0', font: { size: 11 } },
+              grid:  { color: '#1e1e40' },
+            },
+            y: {
+              min: 0,
+              max: 1,
+              ticks: {
+                color: '#a0a0b0',
+                font: { size: 11 },
+                callback: v => (v * 100).toFixed(0) + '%',
+              },
+              grid: { color: '#1e1e40' },
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => ` Score: ${(ctx.parsed.y * 100).toFixed(1)}%`
+              }
+            }
+          }
+        }
+      });
+    }
+
+    /* ── Update UI ──────────────────────────────────────── */
+    function updateUI(d) {
+      /* score card */
+      const sv = $('score-val');
+      sv.textContent = pct(d.score);
+      sv.className = 'card-value ' + scoreClass(d.score);
+
+      $('score-sub').textContent = 'Best: ' + pct(d.best_score);
+      $('defense-val').textContent = pct(d.defense_rate);
+      $('utility-val').textContent = pct(d.utility_rate);
+
+      /* task info */
+      $('task-id-val').textContent = d.task_id;
+      $('step-val').textContent    = `Step ${d.current_step} / 4`;
+      $('best-val').textContent    = pct(d.best_score);
+
+      const pctStep = Math.min((d.current_step / 4) * 100, 100);
+      $('step-bar').style.width = pctStep + '%';
+
+      /* feedback */
+      $('feedback-text').textContent = d.feedback || 'No feedback yet.';
+
+      /* done banner */
+      $('done-banner').style.display = d.done ? 'block' : 'none';
+
+      /* line chart */
+      const history = d.scores_history || [];
+      lineChart.data.labels   = history.map((_, i) => `Step ${i + 1}`);
+      lineChart.data.datasets[0].data = history;
+      lineChart.data.datasets[0].borderColor = scoreColor(d.score);
+      lineChart.data.datasets[0].backgroundColor =
+        scoreColor(d.score).replace('#', 'rgba(').replace(/(..)(..)(..)/, (m, r, g, b) =>
+          `${parseInt(r,16)},${parseInt(g,16)},${parseInt(b,16)},0.12)`);
+      lineChart.update('active');
+
+      /* donut: weighted contributions */
+      const defContrib  = d.defense_rate  * 0.6;
+      const utilContrib = d.utility_rate  * 0.4;
+      donutChart.data.datasets[0].data = [defContrib, utilContrib];
+      donutChart.data.labels = [
+        `Defense ${pct(defContrib)}`,
+        `Utility ${pct(utilContrib)}`
+      ];
+      donutChart.update('active');
+    }
+
+    /* ── Fetch loop ─────────────────────────────────────── */
+    let hasData = false;
+
+    async function fetchData() {
+      try {
+        const res = await fetch('/dashboard/data');
+        if (!res.ok) throw new Error('no data');
+        const d = await res.json();
+
+        if (!hasData) {
+          hasData = true;
+          $('empty-state').style.display  = 'none';
+          $('main-content').style.display = 'block';
+          buildDonut();
+          buildLine();
+        }
+
+        updateUI(d);
+
+        const badge = $('status-badge');
+        badge.textContent = 'Live';
+        badge.className   = 'badge live';
+      } catch (e) {
+        const badge = $('status-badge');
+        if (!hasData) {
+          $('empty-state').style.display  = 'flex';
+          $('main-content').style.display = 'none';
+          badge.textContent = 'Waiting…';
+          badge.className   = 'badge';
+        } else {
+          badge.textContent = 'Retrying…';
+          badge.className   = 'badge';
+        }
+      }
+    }
+
+    fetchData();
+    setInterval(fetchData, 3000);
+  </script>
+</body>
+</html>
