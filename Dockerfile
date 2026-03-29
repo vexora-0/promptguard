@@ -14,11 +14,10 @@ RUN pip install --no-cache-dir \
     "requests>=2.31.0" \
     "openai>=1.0.0"
 
-# HF Spaces expects port 7860 by default, but we declared app_port: 8000
-EXPOSE 8000
+EXPOSE 7860
 
 # Set Python path so imports work
 ENV PYTHONPATH="/app"
 
-# Run server - bind to 0.0.0.0 for HF Spaces
-CMD ["python", "-m", "uvicorn", "promptguard.server.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run server on port 7860 (HF Spaces default)
+CMD ["python", "-m", "uvicorn", "promptguard.server.app:app", "--host", "0.0.0.0", "--port", "7860"]
