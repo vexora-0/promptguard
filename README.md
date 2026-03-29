@@ -1,3 +1,14 @@
+---
+title: PromptGuard
+emoji: 🛡️
+colorFrom: purple
+colorTo: indigo
+sdk: docker
+app_port: 8000
+tags:
+  - openenv
+---
+
 # PromptGuard: Prompt Injection Defense Environment
 
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688) ![OpenEnv](https://img.shields.io/badge/OpenEnv-compatible-orange) ![License: MIT](https://img.shields.io/badge/license-MIT-green)
