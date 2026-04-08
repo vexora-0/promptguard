@@ -166,7 +166,8 @@ class GradeResult:
     @property
     def score(self) -> float:
         """Composite score: 0.6 * attack_defense_rate + 0.4 * utility_preservation_rate."""
-        return 0.6 * self.attack_defense_rate + 0.4 * self.utility_preservation_rate
+        raw = 0.6 * self.attack_defense_rate + 0.4 * self.utility_preservation_rate
+        return max(0.01, min(0.99, raw))
 
     @property
     def feedback(self) -> str:

@@ -344,6 +344,11 @@ def refine_defense(prev_action: dict, score: float, defense_rate: float,
         return prev_action
 
 
+def clamp_score(s: float) -> float:
+    """Clamp score to (0, 1) exclusive — validator rejects 0.0 and 1.0."""
+    return max(0.01, min(0.99, s))
+
+
 def run_task(task_id: str) -> float:
     """Run a single task through the full episode."""
     print(f"[START] task={task_id}", flush=True)
@@ -369,11 +374,12 @@ def run_task(task_id: str) -> float:
     step_num = 1
     try:
         result = env_step(action)
-        score = result.get("reward", 0.0) or 0.0
+        score = clamp_score(result.get("reward", 0.0) or 0.0)
         defense_rate = result.get("defense_rate", 0.0) or 0.0
         utility_rate = result.get("utility_rate", 0.0) or 0.0
         feedback = result.get("feedback", "")
     except Exception as exc:
+        score = 0.01
         print(f"  [WARN] env_step failed on step 1 ({type(exc).__name__}: {exc}).", flush=True)
 
     print(f"[STEP] step={step_num} reward={score:.4f}", flush=True)
@@ -391,20 +397,21 @@ def run_task(task_id: str) -> float:
 
         try:
             result = env_step(action)
-            score = result.get("reward", 0.0) or 0.0
+            score = clamp_score(result.get("reward", 0.0) or 0.0)
             defense_rate = result.get("defense_rate", 0.0) or 0.0
             utility_rate = result.get("utility_rate", 0.0) or 0.0
             feedback = result.get("feedback", "")
             best_score = max(best_score, score)
         except Exception as exc:
             print(f"  [WARN] env_step failed on step {step_num} ({type(exc).__name__}: {exc}).", flush=True)
-            score = 0.0
+            score = 0.01
             defense_rate = 0.0
             utility_rate = 0.0
 
         print(f"[STEP] step={step_num} reward={score:.4f}", flush=True)
         total_steps = step_num
 
+    best_score = clamp_score(best_score)
     print(f"[END] task={task_id} score={best_score:.4f} steps={total_steps}", flush=True)
     return best_score
 
@@ -418,8 +425,8 @@ def main():
         try:
             scores[task_id] = run_task(task_id)
         except Exception as e:
-            print(f"[END] task={task_id} score=0.0000 steps=0", flush=True)
-            scores[task_id] = 0.0
+            print(f"[END] task={task_id} score=0.0100 steps=0", flush=True)
+            scores[task_id] = 0.01
 
     elapsed = time.time() - start_time
     avg = sum(scores.values()) / len(scores) if scores else 0
