@@ -226,30 +226,44 @@ async def grade_action(
     api_key = os.environ.get("HF_TOKEN") or os.environ.get("API_KEY", "")
     model = os.environ.get("MODEL_NAME", "gpt-3.5-turbo")
 
-    client = AsyncOpenAI(base_url=api_base, api_key=api_key)
+    client = AsyncOpenAI(base_url=api_base, api_key=api_key, timeout=15.0)
+    semaphore = asyncio.Semaphore(3)
+
+    # Sample to stay within time limits
+    max_attacks = int(os.environ.get("MAX_EVAL_ATTACKS", "5"))
+    max_queries = int(os.environ.get("MAX_EVAL_QUERIES", "5"))
+    if len(attacks) > max_attacks:
+        by_cat: dict[str, list] = {}
+        for a in attacks:
+            by_cat.setdefault(a.get("category", ""), []).append(a)
+        sampled: list[dict] = []
+        per_cat = max(1, max_attacks // max(len(by_cat), 1))
+        for cat_attacks in by_cat.values():
+            sampled.extend(random.sample(cat_attacks, min(per_cat, len(cat_attacks))))
+        attacks = sampled[:max_attacks]
+    if len(queries) > max_queries:
+        queries = random.sample(queries, max_queries)
 
     async def call_llm(messages: list[dict]) -> str:
-        for attempt in range(3):
-            try:
-                response = await client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    max_tokens=300,
-                    temperature=0.1,
-                )
-                return response.choices[0].message.content or ""
-            except RateLimitError:
-                wait = 3 * (attempt + 1)
-                await asyncio.sleep(wait)
-            except Exception:
-                if attempt == 2:
-                    raise
-                await asyncio.sleep(2)
+        async with semaphore:
+            for attempt in range(2):
+                try:
+                    response = await client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        max_tokens=200,
+                        temperature=0.1,
+                    )
+                    return response.choices[0].message.content or ""
+                except RateLimitError:
+                    await asyncio.sleep(3)
+                except Exception:
+                    if attempt == 1:
+                        raise
+                    await asyncio.sleep(1)
         return ""
 
-    # Process sequentially to respect rate limits
-    attack_results: list[dict] = []
-    for attack in attacks:
+    async def evaluate_attack(attack: dict) -> dict:
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": attack["prompt"]},
@@ -257,24 +271,13 @@ async def grade_action(
         try:
             response_text = await call_llm(messages)
         except Exception as exc:
-            attack_results.append({
-                "passed": False,
-                "reason": f"LLM call failed: {exc}",
-                "category": attack.get("category", "unknown"),
-                "response": "",
-            })
-            continue
-        result = check_attack_defense(
-            response_text, attack.get("canary", ""),
-            attack["prompt"], sensitive_fragments,
-        )
+            return {"passed": False, "reason": f"LLM call failed: {exc}", "category": attack.get("category", "unknown"), "response": ""}
+        result = check_attack_defense(response_text, attack.get("canary", ""), attack["prompt"], sensitive_fragments)
         result["category"] = attack.get("category", "unknown")
         result["response"] = response_text
-        attack_results.append(result)
-        await asyncio.sleep(1)
+        return result
 
-    utility_results: list[dict] = []
-    for query in queries:
+    async def evaluate_query(query: dict) -> dict:
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": query["query"]},
@@ -282,17 +285,18 @@ async def grade_action(
         try:
             response_text = await call_llm(messages)
         except Exception as exc:
-            utility_results.append({
-                "passed": False,
-                "reason": f"LLM call failed: {exc}",
-                "query": query.get("query", ""),
-                "response": "",
-            })
-            continue
+            return {"passed": False, "reason": f"LLM call failed: {exc}", "query": query.get("query", ""), "response": ""}
         result = check_utility(response_text, query)
         result["response"] = response_text
-        utility_results.append(result)
-        await asyncio.sleep(1)
+        return result
+
+    # Run concurrently with semaphore throttle
+    all_results = await asyncio.gather(
+        *[evaluate_attack(a) for a in attacks],
+        *[evaluate_query(q) for q in queries],
+    )
+    attack_results = list(all_results[:len(attacks)])
+    utility_results = list(all_results[len(attacks):])
 
     attack_defense_rate = (
         sum(1 for r in attack_results if r.get("passed")) / len(attack_results)
