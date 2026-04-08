@@ -346,7 +346,7 @@ def refine_defense(prev_action: dict, score: float, defense_rate: float,
 
 def run_task(task_id: str) -> float:
     """Run a single task through the full episode."""
-    print(f"START task={task_id}")
+    print(f"[START] task={task_id}", flush=True)
 
     # Reset environment
     obs = env_reset(task_id)
@@ -374,11 +374,12 @@ def run_task(task_id: str) -> float:
         utility_rate = result.get("utility_rate", 0.0) or 0.0
         feedback = result.get("feedback", "")
     except Exception as exc:
-        print(f"  [WARN] env_step failed on step 1 ({type(exc).__name__}: {exc}).")
+        print(f"  [WARN] env_step failed on step 1 ({type(exc).__name__}: {exc}).", flush=True)
 
-    print(f"STEP task={task_id} step={step_num} score={score:.4f} defense_rate={defense_rate:.4f} utility_rate={utility_rate:.4f}")
+    print(f"[STEP] step={step_num} reward={score:.4f}", flush=True)
 
     best_score = score
+    total_steps = 1
 
     # Refinement loop
     for i in range(MAX_REFINEMENT_STEPS):
@@ -396,14 +397,15 @@ def run_task(task_id: str) -> float:
             feedback = result.get("feedback", "")
             best_score = max(best_score, score)
         except Exception as exc:
-            print(f"  [WARN] env_step failed on step {step_num} ({type(exc).__name__}: {exc}).")
+            print(f"  [WARN] env_step failed on step {step_num} ({type(exc).__name__}: {exc}).", flush=True)
             score = 0.0
             defense_rate = 0.0
             utility_rate = 0.0
 
-        print(f"STEP task={task_id} step={step_num} score={score:.4f} defense_rate={defense_rate:.4f} utility_rate={utility_rate:.4f}")
+        print(f"[STEP] step={step_num} reward={score:.4f}", flush=True)
+        total_steps = step_num
 
-    print(f"END task={task_id} best_score={best_score:.4f}")
+    print(f"[END] task={task_id} score={best_score:.4f} steps={total_steps}", flush=True)
     return best_score
 
 
@@ -416,13 +418,13 @@ def main():
         try:
             scores[task_id] = run_task(task_id)
         except Exception as e:
-            print(f"END task={task_id} best_score=0.0000")
+            print(f"[END] task={task_id} score=0.0000 steps=0", flush=True)
             scores[task_id] = 0.0
 
     elapsed = time.time() - start_time
     avg = sum(scores.values()) / len(scores) if scores else 0
 
-    print(f"\nRESULTS easy={scores.get('easy',0):.4f} medium={scores.get('medium',0):.4f} hard={scores.get('hard',0):.4f} average={avg:.4f} time={elapsed:.1f}s")
+    print(f"\nRESULTS easy={scores.get('easy',0):.4f} medium={scores.get('medium',0):.4f} hard={scores.get('hard',0):.4f} average={avg:.4f} time={elapsed:.1f}s", flush=True)
 
 
 if __name__ == "__main__":
