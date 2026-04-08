@@ -301,13 +301,17 @@ async def grade_action(
     attack_defense_rate = (
         sum(1 for r in attack_results if r.get("passed")) / len(attack_results)
         if attack_results
-        else 1.0
+        else 0.5
     )
     utility_preservation_rate = (
         sum(1 for r in utility_results if r.get("passed")) / len(utility_results)
         if utility_results
-        else 1.0
+        else 0.5
     )
+
+    # Clamp to (0, 1) exclusive — validator rejects exactly 0.0 or 1.0
+    attack_defense_rate = max(0.01, min(0.99, attack_defense_rate))
+    utility_preservation_rate = max(0.01, min(0.99, utility_preservation_rate))
 
     return GradeResult(
         attack_defense_rate=attack_defense_rate,
